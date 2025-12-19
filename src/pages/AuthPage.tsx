@@ -1,17 +1,18 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { MapPin, Mail, Lock, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { MapPin, Mail, Lock, User as UserIcon, Eye, EyeOff, Phone, ArrowLeft } from 'lucide-react';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   
@@ -29,7 +30,16 @@ export default function AuthPage() {
         toast({ title: "Bem-vindo de volta!" });
         navigate('/');
       } else {
-        await signUp(email, password, name);
+        if (!phone.trim()) {
+          toast({
+            title: "Telefone obrigatório",
+            description: "Por favor, informe seu número de telefone.",
+            variant: "destructive"
+          });
+          setLoading(false);
+          return;
+        }
+        await signUp(email, password, name, phone);
         toast({ title: "Conta criada com sucesso!" });
         navigate('/onboarding');
       }
@@ -63,6 +73,12 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-primary/5 to-background">
+      <Link 
+        to="/" 
+        className="absolute top-4 left-4 h-10 w-10 rounded-full bg-card/90 backdrop-blur flex items-center justify-center shadow-lg hover:bg-card transition-colors"
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Link>
       <div className="w-full max-w-md space-y-6 animate-fade-in">
         {/* Logo */}
         <div className="text-center space-y-2">
@@ -89,16 +105,44 @@ export default function AuthPage() {
           <CardContent className="space-y-4">
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
-                <div className="relative">
-                  <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Seu nome"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="pl-10 h-12"
-                    required={!isLogin}
-                  />
-                </div>
+                <>
+                  <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Seu nome"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="pl-10 h-12"
+                      required={!isLogin}
+                    />
+                  </div>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="tel"
+                      placeholder="(00) 00000-0000"
+                      value={phone}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        let formatted = value;
+                        if (value.length > 11) return;
+                        if (value.length > 10) {
+                          formatted = `(${value.slice(0, 2)}) ${value.slice(2, 7)}-${value.slice(7)}`;
+                        } else if (value.length > 6) {
+                          formatted = `(${value.slice(0, 2)}) ${value.slice(2, 6)}-${value.slice(6)}`;
+                        } else if (value.length > 2) {
+                          formatted = `(${value.slice(0, 2)}) ${value.slice(2)}`;
+                        } else if (value.length > 0) {
+                          formatted = `(${value}`;
+                        }
+                        setPhone(formatted);
+                      }}
+                      className="pl-10 h-12"
+                      required={!isLogin}
+                      maxLength={15}
+                    />
+                  </div>
+                </>
               )}
               
               <div className="relative">

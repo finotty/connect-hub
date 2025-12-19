@@ -15,7 +15,7 @@ export default function FavoritesPage() {
         <header className="sticky top-0 z-40 bg-card border-b p-4">
           <h1 className="font-bold text-lg">Favoritos</h1>
         </header>
-        <main className="p-4 space-y-3">
+        <main className="p-4 space-y-3 max-w-6xl mx-auto">
           <Skeleton className="h-24 w-full rounded-xl" />
           <Skeleton className="h-24 w-full rounded-xl" />
         </main>
@@ -32,7 +32,7 @@ export default function FavoritesPage() {
         <h1 className="font-bold text-lg">Favoritos</h1>
       </header>
 
-      <main className="p-4 space-y-6">
+      <main className="p-4 space-y-6 max-w-6xl mx-auto">
         {!hasFavorites ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
@@ -60,7 +60,9 @@ export default function FavoritesPage() {
                         <CardContent className="p-0">
                           <div className="flex gap-3 p-3">
                             <div className="h-20 w-20 rounded-lg bg-secondary flex-shrink-0 overflow-hidden">
-                              {store.bannerUrl ? (
+                              {store.logoUrl ? (
+                                <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" />
+                              ) : store.bannerUrl ? (
                                 <img src={store.bannerUrl} alt={store.name} className="h-full w-full object-cover" />
                               ) : (
                                 <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10">

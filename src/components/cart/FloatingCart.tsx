@@ -1,4 +1,4 @@
-import { ShoppingBag, X, Plus, Minus, Trash2, MapPin, ChevronDown } from 'lucide-react';
+import { ShoppingBag, X, Plus, Minus, Trash2, MapPin, ChevronDown, Store as StoreIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
 import { useOrders } from '@/contexts/OrdersContext';
@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +19,7 @@ export function FloatingCart() {
   const { createNotification } = useNotifications();
   const { addresses, defaultAddress } = useAddresses();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [address, setAddress] = useState(defaultAddress ? `${defaultAddress.street}, ${defaultAddress.number}${defaultAddress.complement ? ` - ${defaultAddress.complement}` : ''}, ${defaultAddress.neighborhood}, ${defaultAddress.city} - ${defaultAddress.state}` : '');
   const [useSavedAddress, setUseSavedAddress] = useState(!!defaultAddress);
@@ -27,6 +29,54 @@ export function FloatingCart() {
   const itemCount = getItemCount();
   const total = getTotal();
 
+  // Função para gerar mensagem WhatsApp para uma loja específica
+  const generateWhatsAppMessageForStore = (
+    storeItems: typeof items,
+    storeName: string,
+    storeWhatsapp: string,
+    address: string,
+    storeTotal: number
+  ): string => {
+    const itemsList = storeItems.map(item => {
+      let itemText = '';
+      let itemPrice = 0;
+      
+      if (item.customQuantity) {
+        if (item.customQuantity.type === 'weight') {
+          const weightLabel = item.customQuantity.displayLabel || 
+            (item.product.weightUnit === 'kg' 
+              ? `${item.customQuantity.amount / 1000}kg` 
+              : `${item.customQuantity.amount}g`);
+          itemText = `${weightLabel} x ${item.product.name}`;
+          
+          if (item.product.weightUnit === 'g') {
+            itemPrice = item.product.price * (item.customQuantity.amount / 100) * item.quantity;
+          } else {
+            const weightInKg = item.customQuantity.amount / 1000;
+            itemPrice = item.product.price * weightInKg * item.quantity;
+          }
+        } else if (item.customQuantity.type === 'value') {
+          const valueAmount = item.customQuantity.amount;
+          const unitsPerReal = item.product.valueQuantity || 1;
+          const totalUnits = Math.round(valueAmount * unitsPerReal * item.quantity);
+          const unitLabel = item.product.valueLabel || 'unidades';
+          itemText = `${totalUnits} x ${item.product.name}`;
+          itemPrice = valueAmount * item.quantity;
+        }
+      } else {
+        itemText = `${item.quantity}x ${item.product.name}`;
+        itemPrice = item.product.price * item.quantity;
+      }
+      
+      itemText += `   R$ ${itemPrice.toFixed(2)}`;
+      return itemText;
+    }).join('\n');
+    
+    const message = `Olá! 👋\n\nVi no *App do Bairro* e gostaria de fazer um pedido:\n\n${itemsList}\n\n*Total: R$ ${storeTotal.toFixed(2)}*\n\n📍 *Endereço:* ${address}\n\nPode confirmar a disponibilidade?`;
+    
+    return `https://wa.me/55${storeWhatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+  };
+
   console.log('🛒 FloatingCart rendered:', { itemCount, total, itemsCount: items.length, user: user?.uid || 'none', isOpen });
 
   if (itemCount === 0) return null;
@@ -34,21 +84,44 @@ export function FloatingCart() {
   const handleCheckout = async () => {
     console.log('🛒 handleCheckout called');
     
-    if (!address.trim()) {
-      console.log('⚠️ No address provided');
+    if (!user) {
+      console.log('⚠️ No user logged in');
+      setIsOpen(false);
       toast({
-        title: "Endereço obrigatório",
-        description: "Por favor, informe seu endereço para entrega.",
+        title: "Login necessário",
+        description: "Redirecionando para a tela de login...",
+      });
+      navigate('/auth');
+      return;
+    }
+
+    // Verificar se o usuário tem telefone cadastrado
+    if (!user.phone || !user.phone.trim()) {
+      console.log('⚠️ No phone number');
+      toast({
+        title: "Telefone obrigatório",
+        description: "Por favor, cadastre seu número de telefone nas configurações para fazer pedidos.",
         variant: "destructive"
       });
       return;
     }
 
-    if (!user) {
-      console.log('⚠️ No user logged in');
+    // Verificar se o usuário tem pelo menos 1 endereço cadastrado
+    if (!addresses || addresses.length === 0) {
+      console.log('⚠️ No addresses');
       toast({
-        title: "Login necessário",
-        description: "Por favor, faça login para finalizar o pedido.",
+        title: "Endereço obrigatório",
+        description: "Por favor, cadastre pelo menos um endereço de entrega nas configurações.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    if (!address.trim()) {
+      console.log('⚠️ No address provided');
+      toast({
+        title: "Endereço obrigatório",
+        description: "Por favor, selecione ou informe seu endereço para entrega.",
         variant: "destructive"
       });
       return;
@@ -68,104 +141,168 @@ export function FloatingCart() {
     setLoading(true);
 
     try {
-      // Cria o pedido no Firestore
-      const firstItem = items[0];
-      const storeId = firstItem.product.storeId;
+      // Agrupar itens por loja
+      const itemsByStore = new Map<string, typeof items>();
       
-      console.log('🛒 Creating order with details:', {
-        userId: user.uid,
-        storeId: storeId,
-        storeName: firstItem.storeName,
-        productStoreId: firstItem.product.storeId,
-        itemsCount: items.length,
-        total: getTotal(),
-        items: items.map(item => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          quantity: item.quantity,
-        }))
-      });
-      
-      const orderData = {
-        userId: user.uid,
-        storeId: storeId,
-        storeName: firstItem.storeName,
-        storeWhatsapp: firstItem.storeWhatsapp,
-        items: items.map(item => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          quantity: item.quantity,
-          price: item.product.price,
-          imageUrl: item.product.imageUrl,
-        })),
-        total: getTotal(),
-        address: address.trim(),
-        status: 'pending' as const,
-      };
-      
-      console.log('📝 Order data prepared:', orderData);
-      console.log('📞 Calling createOrder...');
-      
-      const orderId = await createOrder(orderData);
-      
-      console.log('✅ Order created successfully:', {
-        orderId,
-        storeId,
-        storeName: firstItem.storeName,
-        userId: user.uid
+      items.forEach(item => {
+        const storeId = item.product.storeId;
+        if (!itemsByStore.has(storeId)) {
+          itemsByStore.set(storeId, []);
+        }
+        itemsByStore.get(storeId)!.push(item);
       });
 
-      // Cria notificação para o vendedor
-      try {
-        const { getDoc, doc } = await import('firebase/firestore');
-        const { db } = await import('@/lib/firebase');
-        const storeDoc = await getDoc(doc(db, 'stores', firstItem.product.storeId));
-        if (storeDoc.exists()) {
-          const storeData = storeDoc.data();
-          console.log('📦 Creating notification for vendor:', storeData.ownerId);
-          await createNotification(
-            storeData.ownerId,
-            'new_order',
-            'Novo pedido recebido!',
-            `Você recebeu um novo pedido de ${user.name} no valor de R$ ${getTotal().toFixed(2)}`,
-            orderId
-          );
-          console.log('✅ Vendor notification created');
-        } else {
-          console.warn('⚠️ Store not found:', firstItem.product.storeId);
+      console.log('🛒 Items grouped by store:', {
+        storesCount: itemsByStore.size,
+        stores: Array.from(itemsByStore.keys())
+      });
+
+      const createdOrders: string[] = [];
+      const storeNames: string[] = [];
+      const whatsappUrls: string[] = [];
+
+      // Criar um pedido para cada loja
+      for (const [storeId, storeItems] of itemsByStore.entries()) {
+        const firstItem = storeItems[0];
+        
+        // Calcular total para esta loja
+        const storeTotal = storeItems.reduce((total, item) => {
+          if (item.customQuantity) {
+            if (item.customQuantity.type === 'weight') {
+              if (item.product.weightUnit === 'g') {
+                const priceForWeight = item.product.price * (item.customQuantity.amount / 100);
+                return total + (priceForWeight * item.quantity);
+              } else {
+                const weightInKg = item.customQuantity.amount / 1000;
+                return total + (item.product.price * weightInKg * item.quantity);
+              }
+            } else if (item.customQuantity.type === 'value') {
+              return total + (item.customQuantity.amount * item.quantity);
+            }
+          }
+          return total + (item.product.price * item.quantity);
+        }, 0);
+        
+        console.log('🛒 Creating order for store:', {
+          storeId,
+          storeName: firstItem.storeName,
+          itemsCount: storeItems.length,
+          total: storeTotal
+        });
+        
+        const orderData = {
+          userId: user.uid,
+          storeId: storeId,
+          storeName: firstItem.storeName,
+          storeWhatsapp: firstItem.storeWhatsapp,
+          items: storeItems.map(item => {
+            const itemData: any = {
+              productId: item.product.id,
+              productName: item.product.name,
+              quantity: item.quantity,
+              price: item.product.price,
+              imageUrl: item.product.imageUrl,
+              saleType: item.product.saleType,
+            };
+            
+            // Adicionar informações de customQuantity se existir
+            if (item.customQuantity) {
+              itemData.customQuantity = item.customQuantity;
+            }
+            
+            // Adicionar informações específicas do tipo de venda
+            if (item.product.saleType === 'value') {
+              itemData.valueQuantity = item.product.valueQuantity;
+              itemData.valueLabel = item.product.valueLabel;
+            } else if (item.product.saleType === 'weight') {
+              itemData.weightUnit = item.product.weightUnit;
+            }
+            
+            return itemData;
+          }),
+          total: storeTotal,
+          address: address.trim(),
+          status: 'pending' as const,
+        };
+        
+        const orderId = await createOrder(orderData);
+        createdOrders.push(orderId);
+        storeNames.push(firstItem.storeName);
+
+        // Cria notificação para o vendedor
+        try {
+          const { getDoc, doc } = await import('firebase/firestore');
+          const { db } = await import('@/lib/firebase');
+          const storeDoc = await getDoc(doc(db, 'stores', storeId));
+          if (storeDoc.exists()) {
+            const storeData = storeDoc.data();
+            await createNotification(
+              storeData.ownerId,
+              'new_order',
+              'Novo pedido recebido!',
+              `Você recebeu um novo pedido de ${user.name} no valor de R$ ${storeTotal.toFixed(2)}`,
+              orderId
+            );
+          }
+        } catch (error) {
+          console.error('❌ Error creating vendor notification:', error);
         }
-      } catch (error) {
-        console.error('❌ Error creating vendor notification:', error);
+
+        // Gerar mensagem WhatsApp para esta loja
+        const whatsappMessage = generateWhatsAppMessageForStore(storeItems, firstItem.storeName, firstItem.storeWhatsapp, address, storeTotal);
+        whatsappUrls.push(whatsappMessage);
       }
 
       // Cria notificação para o cliente
       try {
-        console.log('📦 Creating notification for customer:', user.uid);
+        const storesText = storeNames.length === 1 
+          ? storeNames[0]
+          : `${storeNames.length} lojas (${storeNames.join(', ')})`;
+        
         await createNotification(
           user.uid,
           'order_confirmed',
-          'Pedido confirmado!',
-          `Seu pedido foi enviado para ${firstItem.storeName}. Aguarde a confirmação.`,
-          orderId
+          'Pedidos enviados!',
+          `Seus pedidos foram enviados para ${storesText}. Aguarde a confirmação.`,
+          createdOrders[0] // Usar o primeiro orderId como referência
         );
-        console.log('✅ Customer notification created');
       } catch (error) {
         console.error('❌ Error creating customer notification:', error);
       }
 
-      // Abre WhatsApp
-      const whatsappUrl = generateWhatsAppMessage(address);
-      window.open(whatsappUrl, '_blank');
+      // Abrir WhatsApp apenas se for uma única loja
+      // Se forem múltiplas lojas, o usuário pode abrir manualmente na página de pedidos
+      if (whatsappUrls.length === 1) {
+        // Se for apenas uma loja, abrir WhatsApp diretamente
+        window.open(whatsappUrls[0], '_blank');
+      }
 
       // Limpa carrinho
       clearCart();
       setIsOpen(false);
       setAddress('');
       
-      toast({
-        title: "Pedido enviado!",
-        description: "Você será redirecionado para o WhatsApp.",
-      });
+      const storesCount = itemsByStore.size;
+      
+      // Se houver múltiplas lojas, redirecionar para página de pedidos
+      if (storesCount > 1) {
+        toast({
+          title: `${storesCount} pedidos enviados!`,
+          description: `Redirecionando para a página de pedidos... Você pode acessar o WhatsApp de cada pedido individualmente.`,
+          duration: 4000,
+        });
+        
+        // Redirecionar para página de pedidos após 1.5 segundos
+        setTimeout(() => {
+          navigate('/orders');
+        }, 1500);
+      } else {
+        // Uma única loja: WhatsApp já foi aberto automaticamente
+        toast({
+          title: "Pedido enviado!",
+          description: `Você foi redirecionado para o WhatsApp de ${storeNames[0]}.`,
+        });
+      }
     } catch (error: any) {
       console.error('❌ Error in handleCheckout:', error);
       console.error('❌ Error details:', {
@@ -212,47 +349,95 @@ export function FloatingCart() {
           </DialogHeader>
 
           <div className="flex-1 overflow-y-auto py-4 space-y-3">
-            {items.map((item) => (
-              <div 
-                key={item.product.id}
-                className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50"
-              >
-                {item.product.imageUrl && (
-                  <img 
-                    src={item.product.imageUrl} 
-                    alt={item.product.name}
-                    className="h-16 w-16 rounded-lg object-cover"
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-medium text-sm truncate">{item.product.name}</h4>
-                  <p className="text-primary font-semibold text-sm">
-                    R$ {(item.product.price * item.quantity).toFixed(2)}
-                  </p>
+            {(() => {
+              // Agrupar itens por loja para exibição
+              const itemsByStore = new Map<string, typeof items>();
+              items.forEach(item => {
+                const storeId = item.product.storeId;
+                if (!itemsByStore.has(storeId)) {
+                  itemsByStore.set(storeId, []);
+                }
+                itemsByStore.get(storeId)!.push(item);
+              });
+
+              const storesArray = Array.from(itemsByStore.entries());
+              
+              return storesArray.map(([storeId, storeItems]) => (
+                <div key={storeId} className="space-y-2">
+                  {storesArray.length > 1 && (
+                    <div className="flex items-center gap-2 px-2">
+                      <StoreIcon className="h-4 w-4 text-primary" />
+                      <span className="text-xs font-semibold text-primary">
+                        {storeItems[0].storeName}
+                      </span>
+                    </div>
+                  )}
+                  {storeItems.map((item) => (
+                    <div 
+                      key={`${item.product.id}-${item.customQuantity?.amount || ''}`}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-secondary/50"
+                    >
+                      {item.product.imageUrl && (
+                        <img 
+                          src={item.product.imageUrl} 
+                          alt={item.product.name}
+                          className="h-16 w-16 rounded-lg object-cover"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-sm truncate">{item.product.name}</h4>
+                        {item.customQuantity && (
+                          <p className="text-xs text-muted-foreground">
+                            {item.customQuantity.displayLabel || 
+                              (item.customQuantity.type === 'weight' 
+                                ? `${item.customQuantity.amount}g`
+                                : `R$ ${item.customQuantity.amount.toFixed(2)}`)}
+                          </p>
+                        )}
+                        <p className="text-primary font-semibold text-sm">
+                          R$ {(() => {
+                            if (item.customQuantity) {
+                              if (item.customQuantity.type === 'weight') {
+                                if (item.product.weightUnit === 'g') {
+                                  return (item.product.price * (item.customQuantity.amount / 100) * item.quantity).toFixed(2);
+                                } else {
+                                  const weightInKg = item.customQuantity.amount / 1000;
+                                  return (item.product.price * weightInKg * item.quantity).toFixed(2);
+                                }
+                              } else {
+                                return (item.customQuantity.amount * item.quantity).toFixed(2);
+                              }
+                            }
+                            return (item.product.price * item.quantity).toFixed(2);
+                          })()}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => updateQuantity(item.product.id, item.quantity - 1, item.customQuantity)}
+                          className="h-8 w-8 rounded-full bg-background flex items-center justify-center hover:bg-muted transition-colors"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        <span className="w-6 text-center font-semibold">{item.quantity}</span>
+                        <button
+                          onClick={() => updateQuantity(item.product.id, item.quantity + 1, item.customQuantity)}
+                          className="h-8 w-8 rounded-full bg-background flex items-center justify-center hover:bg-muted transition-colors"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => removeFromCart(item.product.id)}
+                          className="h-8 w-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive/20 transition-colors ml-1"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
-                    className="h-8 w-8 rounded-full bg-background flex items-center justify-center hover:bg-muted transition-colors"
-                  >
-                    <Minus className="h-4 w-4" />
-                  </button>
-                  <span className="w-6 text-center font-semibold">{item.quantity}</span>
-                  <button
-                    onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
-                    className="h-8 w-8 rounded-full bg-background flex items-center justify-center hover:bg-muted transition-colors"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => removeFromCart(item.product.id)}
-                    className="h-8 w-8 rounded-full bg-destructive/10 text-destructive flex items-center justify-center hover:bg-destructive/20 transition-colors ml-1"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
 
           <div className="border-t pt-4 space-y-4">

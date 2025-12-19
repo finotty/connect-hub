@@ -12,9 +12,11 @@ import { ClipboardList, Package, Truck, CheckCircle, Clock, XCircle } from 'luci
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { updateDoc, doc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { OrderStatus } from '@/types';
+import { generateOrderConfirmationWhatsApp, generateOutForDeliveryWhatsApp, generateWhatsAppUrl, generateInitialOrderWhatsApp } from '@/lib/whatsapp';
+import { MessageCircle } from 'lucide-react';
 
 const statusConfig = {
   pending: { label: 'Aguardando confirmação', icon: Clock, color: 'text-yellow-600 bg-yellow-50' },
@@ -23,6 +25,47 @@ const statusConfig = {
   out_for_delivery: { label: 'Saiu para entrega', icon: Truck, color: 'text-purple-600 bg-purple-50' },
   delivered: { label: 'Recebido', icon: CheckCircle, color: 'text-green-600 bg-green-50' },
   cancelled: { label: 'Cancelado', icon: XCircle, color: 'text-red-600 bg-red-50' },
+};
+
+// Função auxiliar para formatar o texto do item do pedido
+const formatOrderItem = (item: any) => {
+  let displayText = '';
+  let itemPrice = 0;
+  
+  if (item.customQuantity) {
+    if (item.customQuantity.type === 'weight') {
+      // Para produtos por peso: mostrar peso x produto
+      const weightLabel = item.customQuantity.displayLabel || 
+        (item.weightUnit === 'kg' 
+          ? `${item.customQuantity.amount / 1000}kg` 
+          : `${item.customQuantity.amount}g`);
+      displayText = `${weightLabel} x ${item.productName}`;
+      
+      // Calcular preço
+      if (item.weightUnit === 'g') {
+        itemPrice = item.price * (item.customQuantity.amount / 100) * item.quantity;
+      } else {
+        const weightInKg = item.customQuantity.amount / 1000;
+        itemPrice = item.price * weightInKg * item.quantity;
+      }
+    } else if (item.customQuantity.type === 'value') {
+      // Para produtos por valor: calcular quantidade de unidades
+      const valueAmount = item.customQuantity.amount;
+      const unitsPerReal = item.valueQuantity || 1;
+      const totalUnits = Math.round(valueAmount * unitsPerReal * item.quantity);
+      const unitLabel = item.valueLabel || 'unidades';
+      displayText = `${totalUnits} x ${item.productName}`;
+      
+      // O valor que o cliente escolheu é o preço que ele vai pagar
+      itemPrice = valueAmount * item.quantity;
+    }
+  } else {
+    // Produtos por unidade
+    displayText = `${item.quantity}x ${item.productName}`;
+    itemPrice = item.price * item.quantity;
+  }
+  
+  return { displayText, itemPrice };
 };
 
 export default function OrdersPage() {
@@ -58,7 +101,7 @@ export default function OrdersPage() {
         <header className="sticky top-0 z-40 bg-card border-b p-4">
           <h1 className="font-bold text-lg">Meus Pedidos</h1>
         </header>
-        <main className="p-4 space-y-3">
+        <main className="p-4 space-y-3 max-w-6xl mx-auto">
           <Skeleton className="h-32 w-full rounded-xl" />
           <Skeleton className="h-32 w-full rounded-xl" />
           <Skeleton className="h-32 w-full rounded-xl" />
@@ -77,7 +120,7 @@ export default function OrdersPage() {
         <h1 className="font-bold text-lg">{isVendor ? 'Pedidos da Loja' : 'Meus Pedidos'}</h1>
       </header>
 
-      <main className="p-4 space-y-6">
+      <main className="p-4 space-y-6 max-w-6xl mx-auto">
         {orders.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
@@ -124,6 +167,37 @@ export default function OrdersPage() {
                           order.id
                         );
 
+                        // Envia mensagem via WhatsApp para o cliente quando confirmado ou saiu para entrega
+                        if (newStatus === 'confirmed' || newStatus === 'out_for_delivery') {
+                          try {
+                            // Busca dados do cliente
+                            const userDoc = await getDoc(doc(db, 'users', order.userId));
+                            if (userDoc.exists()) {
+                              const userData = userDoc.data();
+                              const customerPhone = userData.phone;
+                              const customerName = userData.name || 'Cliente';
+
+                              if (customerPhone) {
+                                let message = '';
+                                if (newStatus === 'confirmed') {
+                                  message = generateOrderConfirmationWhatsApp(order, customerName);
+                                } else if (newStatus === 'out_for_delivery') {
+                                  message = generateOutForDeliveryWhatsApp(order, customerName);
+                                }
+
+                                const whatsappUrl = generateWhatsAppUrl(customerPhone, message);
+                                // Abre WhatsApp em nova aba
+                                window.open(whatsappUrl, '_blank');
+                              } else {
+                                console.warn('⚠️ Cliente não tem número de telefone cadastrado');
+                              }
+                            }
+                          } catch (whatsappError) {
+                            console.error('❌ Erro ao enviar WhatsApp:', whatsappError);
+                            // Não bloqueia a atualização do status se o WhatsApp falhar
+                          }
+                        }
+
                         toast({ title: "Status atualizado com sucesso!" });
                       } catch (error: any) {
                         toast({
@@ -161,13 +235,15 @@ export default function OrdersPage() {
                           </div>
 
                           <div className="space-y-2 mb-3">
-                            {order.items.map((item, idx) => (
-                              <div key={idx} className="flex items-center gap-2 text-sm">
-                                <span className="text-muted-foreground">{item.quantity}x</span>
-                                <span className="flex-1 truncate">{item.productName}</span>
-                                <span className="font-medium">R$ {(item.price * item.quantity).toFixed(2)}</span>
-                              </div>
-                            ))}
+                            {order.items.map((item, idx) => {
+                              const { displayText, itemPrice } = formatOrderItem(item);
+                              return (
+                                <div key={idx} className="flex items-center gap-2 text-sm">
+                                  <span className="text-muted-foreground flex-1 truncate">{displayText}</span>
+                                  <span className="font-medium">R$ {itemPrice.toFixed(2)}</span>
+                                </div>
+                              );
+                            })}
                           </div>
 
                           <div className="flex items-center justify-between pt-3 border-t mb-3">
@@ -180,6 +256,23 @@ export default function OrdersPage() {
                               <p className="text-xs font-medium truncate max-w-[150px]">{order.address}</p>
                             </div>
                           </div>
+
+                          {/* Botão para cliente abrir WhatsApp (apenas para pedidos ativos) */}
+                          {!isVendor && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                            <Button
+                              variant="whatsapp"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                const message = generateInitialOrderWhatsApp(order);
+                                const whatsappUrl = generateWhatsAppUrl(order.storeWhatsapp, message);
+                                window.open(whatsappUrl, '_blank');
+                              }}
+                            >
+                              <MessageCircle className="h-4 w-4 mr-2" />
+                              Abrir no WhatsApp
+                            </Button>
+                          )}
 
                           {/* Botões de ação para vendedores */}
                           {isVendor && order.status !== 'delivered' && order.status !== 'cancelled' && (
@@ -306,7 +399,7 @@ export default function OrdersPage() {
                             ))}
                           </div>
 
-                          <div className="flex items-center justify-between pt-3 border-t">
+                          <div className="flex items-center justify-between pt-3 border-t mb-3">
                             <div>
                               <p className="text-xs text-muted-foreground">Total</p>
                               <p className="font-bold text-lg text-primary">R$ {order.total.toFixed(2)}</p>
@@ -318,6 +411,23 @@ export default function OrdersPage() {
                               </div>
                             )}
                           </div>
+
+                          {/* Botão para cliente abrir WhatsApp (apenas para pedidos ativos) */}
+                          {!isVendor && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                            <Button
+                              variant="whatsapp"
+                              size="sm"
+                              className="w-full"
+                              onClick={() => {
+                                const message = generateInitialOrderWhatsApp(order);
+                                const whatsappUrl = generateWhatsAppUrl(order.storeWhatsapp, message);
+                                window.open(whatsappUrl, '_blank');
+                              }}
+                            >
+                              <MessageCircle className="h-4 w-4 mr-2" />
+                              Abrir no WhatsApp
+                            </Button>
+                          )}
                         </CardContent>
                       </Card>
                     );

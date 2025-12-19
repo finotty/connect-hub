@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { collection, query, where, addDoc, updateDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Notification, NotificationType } from '@/types';
 import { useAuth } from './AuthContext';
@@ -10,6 +10,8 @@ interface NotificationsContextType {
   loading: boolean;
   markAsRead: (notificationId: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
+  deleteNotification: (notificationId: string) => Promise<void>;
+  deleteAllRead: () => Promise<void>;
   createNotification: (userId: string, type: NotificationType, title: string, message: string, orderId?: string) => Promise<void>;
 }
 
@@ -116,6 +118,20 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     await Promise.all(updates);
   }, [user, notifications]);
 
+  const deleteNotification = useCallback(async (notificationId: string) => {
+    await deleteDoc(doc(db, 'notifications', notificationId));
+  }, []);
+
+  const deleteAllRead = useCallback(async () => {
+    if (!user) return;
+    
+    const readNotifications = notifications.filter(n => n.read);
+    const deletes = readNotifications.map(n => 
+      deleteDoc(doc(db, 'notifications', n.id))
+    );
+    await Promise.all(deletes);
+  }, [user, notifications]);
+
   const createNotification = useCallback(async (
     userId: string,
     type: NotificationType,
@@ -158,6 +174,8 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       loading,
       markAsRead,
       markAllAsRead,
+      deleteNotification,
+      deleteAllRead,
       createNotification,
     }}>
       {children}

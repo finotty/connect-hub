@@ -3,8 +3,9 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bell, Check, Package, Truck, CheckCircle, Clock, ShoppingBag } from 'lucide-react';
+import { Bell, Check, Package, Truck, CheckCircle, Clock, ShoppingBag, Trash2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,7 +20,8 @@ const notificationIcons = {
 };
 
 export default function NotificationsPage() {
-  const { notifications, unreadCount, loading, markAsRead, markAllAsRead } = useNotifications();
+  const { notifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification, deleteAllRead } = useNotifications();
+  const { toast } = useToast();
 
   if (loading) {
     return (
@@ -27,7 +29,7 @@ export default function NotificationsPage() {
         <header className="sticky top-0 z-40 bg-card border-b p-4">
           <h1 className="font-bold text-lg">Notificações</h1>
         </header>
-        <main className="p-4 space-y-3">
+        <main className="p-4 space-y-3 max-w-6xl mx-auto">
           <Skeleton className="h-20 w-full rounded-xl" />
           <Skeleton className="h-20 w-full rounded-xl" />
         </main>
@@ -38,20 +40,45 @@ export default function NotificationsPage() {
 
   const handleMarkAllAsRead = async () => {
     await markAllAsRead();
+    toast({ title: "Todas as notificações foram marcadas como lidas" });
+  };
+
+  const handleDeleteAllRead = async () => {
+    const readCount = notifications.filter(n => n.read).length;
+    if (readCount === 0) {
+      toast({ title: "Não há notificações lidas para deletar", variant: "destructive" });
+      return;
+    }
+    await deleteAllRead();
+    toast({ title: `${readCount} notificação(ões) deletada(s)` });
+  };
+
+  const handleDeleteNotification = async (notificationId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    await deleteNotification(notificationId);
+    toast({ title: "Notificação deletada" });
   };
 
   return (
     <div className="min-h-screen pb-20 bg-background">
-      <header className="sticky top-0 z-40 bg-card border-b p-4 flex items-center justify-between">
-        <h1 className="font-bold text-lg">Notificações</h1>
+      <header className="sticky top-0 z-40 bg-card border-b p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="font-bold text-lg">Notificações</h1>
+          {notifications.filter(n => n.read).length > 0 && (
+            <Button variant="ghost" size="sm" onClick={handleDeleteAllRead}>
+              <Trash2 className="h-4 w-4 mr-1" />
+              Limpar lidas
+            </Button>
+          )}
+        </div>
         {unreadCount > 0 && (
-          <Button variant="ghost" size="sm" onClick={handleMarkAllAsRead}>
+          <Button variant="ghost" size="sm" className="w-full" onClick={handleMarkAllAsRead}>
             Marcar todas como lidas
           </Button>
         )}
       </header>
 
-      <main className="p-4">
+      <main className="p-4 max-w-6xl mx-auto">
         {notifications.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
@@ -101,9 +128,17 @@ export default function NotificationsPage() {
                               {format(notification.createdAt, "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}
                             </p>
                           </div>
-                          {isUnread && (
-                            <div className="h-2 w-2 rounded-full bg-primary flex-shrink-0 mt-1" />
-                          )}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {isUnread && (
+                              <div className="h-2 w-2 rounded-full bg-primary mt-1" />
+                            )}
+                            <button
+                              onClick={(e) => handleDeleteNotification(notification.id, e)}
+                              className="h-6 w-6 rounded-full flex items-center justify-center hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                         </div>
                         {notification.orderId && (
                           <Link

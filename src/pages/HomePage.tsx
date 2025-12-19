@@ -9,7 +9,7 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { FloatingCart } from '@/components/cart/FloatingCart';
 import { Card, CardContent } from '@/components/ui/card';
 import { StoreSkeleton, BannerSkeleton } from '@/components/ui/skeleton';
-import { MapPin, Star, Clock, ChevronRight, Store as StoreIcon, Utensils, Wrench, Search, Bell } from 'lucide-react';
+import { MapPin, Star, Clock, ChevronRight, Store as StoreIcon, Utensils, Wrench, Search, Bell, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const categories = [
@@ -95,7 +95,29 @@ export default function HomePage() {
         </div>
       </header>
 
-      <main className="p-4 space-y-6">
+      <main className="p-4 space-y-6 max-w-6xl mx-auto">
+        {/* Partner Dashboard Link */}
+        {user && (user.role === 'vendor_product' || user.role === 'vendor_service') && (
+          <Link to="/partner">
+            <Card className="bg-gradient-to-r from-primary/10 to-primary/5 border-primary/20 hover:from-primary/15 hover:to-primary/10 transition-all active:scale-[0.99]">
+              <CardContent className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-primary/20 flex items-center justify-center">
+                    <BarChart3 className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm">Painel do Parceiro</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {user.role === 'vendor_product' ? 'Gerencie sua loja e pedidos' : 'Gerencie seu serviço'}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </CardContent>
+            </Card>
+          </Link>
+        )}
+
         {/* Banner */}
         {loading ? (
           <BannerSkeleton />
@@ -142,20 +164,23 @@ export default function HomePage() {
               </Link>
             </div>
             
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-w-full md:max-w-4xl">
               {loading ? (
                 <>
                   <StoreSkeleton />
                   <StoreSkeleton />
                   <StoreSkeleton />
+                  <StoreSkeleton />
+                  <StoreSkeleton />
+                  <StoreSkeleton />
                 </>
               ) : filteredStores.length > 0 ? (
-                filteredStores.map(store => (
+                filteredStores.slice(0, 6).map(store => (
                   <Link key={store.id} to={`/store/${store.id}`}>
-                    <Card className="overflow-hidden active:scale-[0.99] transition-transform">
-                      <CardContent className="p-0">
-                        <div className="flex gap-3 p-3">
-                          <div className="h-20 w-20 rounded-lg bg-secondary flex-shrink-0 overflow-hidden">
+                    <Card className="overflow-hidden active:scale-[0.99] transition-transform h-full">
+                      <CardContent className="p-3">
+                        <div className="flex flex-col gap-2">
+                          <div className="h-32 rounded-lg bg-secondary overflow-hidden">
                             {store.logoUrl ? (
                               <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" />
                             ) : store.bannerUrl ? (
@@ -167,10 +192,10 @@ export default function HomePage() {
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <h4 className="font-semibold truncate">{store.name}</h4>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <h4 className="font-semibold text-sm truncate">{store.name}</h4>
                               <span className={cn(
-                                "text-xs px-2 py-0.5 rounded-full flex-shrink-0",
+                                "text-xs px-1.5 py-0.5 rounded-full flex-shrink-0",
                                 store.isOpen 
                                   ? "bg-success/10 text-success" 
                                   : "bg-muted text-muted-foreground"
@@ -178,16 +203,16 @@ export default function HomePage() {
                                 {store.isOpen ? 'Aberto' : 'Fechado'}
                               </span>
                             </div>
-                            <p className="text-sm text-muted-foreground truncate">{store.category}</p>
-                            <div className="flex items-center gap-3 mt-1.5 text-sm">
+                            <p className="text-xs text-muted-foreground truncate mb-1.5">{store.category}</p>
+                            <div className="flex items-center gap-2 text-xs">
                               {store.rating && (
                                 <span className="flex items-center gap-1 text-foreground">
-                                  <Star className="h-3.5 w-3.5 fill-primary text-primary" />
+                                  <Star className="h-3 w-3 fill-primary text-primary" />
                                   {store.rating.toFixed(1)}
                                 </span>
                               )}
                               <span className="text-muted-foreground flex items-center gap-1">
-                                <Clock className="h-3.5 w-3.5" />
+                                <Clock className="h-3 w-3" />
                                 20-30 min
                               </span>
                             </div>
@@ -198,7 +223,7 @@ export default function HomePage() {
                   </Link>
                 ))
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
+                <div className="col-span-full text-center py-8 text-muted-foreground">
                   <StoreIcon className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>Nenhuma loja encontrada</p>
                   <p className="text-sm">Seja o primeiro a cadastrar!</p>
@@ -218,18 +243,22 @@ export default function HomePage() {
               </Link>
             </div>
             
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 max-w-full md:max-w-4xl">
               {loading ? (
                 <>
                   <StoreSkeleton />
                   <StoreSkeleton />
+                  <StoreSkeleton />
+                  <StoreSkeleton />
+                  <StoreSkeleton />
+                  <StoreSkeleton />
                 </>
               ) : filteredServices.length > 0 ? (
-                filteredServices.map(service => (
+                filteredServices.slice(0, 6).map(service => (
                   <Link key={service.id} to={`/service/${service.id}`}>
                     <Card className="overflow-hidden h-full active:scale-[0.99] transition-transform">
                       <CardContent className="p-3">
-                        <div className="h-24 rounded-lg bg-secondary mb-2 overflow-hidden">
+                        <div className="h-32 rounded-lg bg-secondary mb-2 overflow-hidden">
                           {service.portfolioImages?.[0] ? (
                             <img src={service.portfolioImages[0]} alt={service.title} className="h-full w-full object-cover" />
                           ) : (
@@ -248,7 +277,7 @@ export default function HomePage() {
                   </Link>
                 ))
               ) : (
-                <div className="col-span-2 text-center py-8 text-muted-foreground">
+                <div className="col-span-full text-center py-8 text-muted-foreground">
                   <Wrench className="h-12 w-12 mx-auto mb-2 opacity-50" />
                   <p>Nenhum serviço encontrado</p>
                 </div>

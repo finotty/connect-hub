@@ -1,23 +1,62 @@
 import { useNavigate, Link } from 'react-router-dom';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
+import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 import { 
   User, Settings, LogOut, ChevronRight, Store, Wrench, 
-  ShoppingBag, Heart, Bell, HelpCircle, MapPin
+  ShoppingBag, Heart, Bell, HelpCircle, MapPin, Camera
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUserProfile } = useAuth();
   const { unreadCount } = useNotifications();
+  const { toast } = useToast();
   const navigate = useNavigate();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   const handleLogout = async () => {
     await logout();
     navigate('/auth');
+  };
+
+  const handleAvatarClick = () => {
+    if (user && avatarInputRef.current) {
+      avatarInputRef.current.click();
+    }
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    try {
+      setUploadingAvatar(true);
+      const fileRef = ref(storage, `users/${user.uid}/avatar/${Date.now()}_${file.name}`);
+      await uploadBytes(fileRef, file);
+      const url = await getDownloadURL(fileRef);
+      await updateUserProfile({ avatarUrl: url });
+      toast({ title: "Foto atualizada com sucesso!" });
+    } catch (error: any) {
+      console.error('Error uploading avatar:', error);
+      toast({ 
+        title: "Erro ao fazer upload", 
+        description: error.message || "Não foi possível atualizar a foto.",
+        variant: "destructive" 
+      });
+    } finally {
+      setUploadingAvatar(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
+    }
   };
 
   const menuItems = [
@@ -49,12 +88,29 @@ export default function ProfilePage() {
         
         {user ? (
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-full bg-primary-foreground/20 flex items-center justify-center overflow-hidden">
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
-              ) : (
-                <User className="h-8 w-8" />
-              )}
+            <div className="relative">
+              <div className="h-16 w-16 rounded-full bg-primary-foreground/20 flex items-center justify-center overflow-hidden">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt={user.name} className="h-full w-full object-cover" />
+                ) : (
+                  <User className="h-8 w-8" />
+                )}
+              </div>
+              <button
+                onClick={handleAvatarClick}
+                disabled={uploadingAvatar}
+                className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50"
+                title="Alterar foto"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
             <div>
               <h2 className="font-bold text-lg">{user.name}</h2>
@@ -79,7 +135,7 @@ export default function ProfilePage() {
         )}
       </header>
 
-      <main className="p-4 -mt-6">
+      <main className="p-4 -mt-6 max-w-6xl mx-auto">
         <Card className="mb-4">
           <CardContent className="p-2">
             {menuItems.map((item, index) => (

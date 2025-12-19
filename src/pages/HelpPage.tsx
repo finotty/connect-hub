@@ -18,7 +18,7 @@ export default function HelpPage() {
         </h1>
       </header>
 
-      <main className="p-4">
+      <main className="p-4 max-w-6xl mx-auto">
         <Tabs defaultValue={isVendor ? "vendor" : "customer"} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="customer">Cliente</TabsTrigger>

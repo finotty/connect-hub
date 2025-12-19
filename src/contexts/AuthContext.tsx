@@ -16,7 +16,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, phone: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   setUserRole: (role: UserRole) => Promise<void>;
@@ -54,14 +54,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, phone: string) => {
+    if (!phone || !phone.trim()) {
+      throw new Error('Telefone é obrigatório');
+    }
+    
     const { user: fbUser } = await createUserWithEmailAndPassword(auth, email, password);
+    
+    // Remove formatação do telefone para armazenar apenas números
+    const cleanPhone = phone.replace(/\D/g, '');
     
     const userData: User = {
       uid: fbUser.uid,
       name,
       email: fbUser.email!,
       role: 'customer',
+      phone: cleanPhone,
       createdAt: new Date()
     };
 

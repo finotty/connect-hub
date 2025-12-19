@@ -3,9 +3,9 @@ import { Product, CartItem } from '@/types';
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (product: Product, storeName: string, storeWhatsapp: string) => void;
+  addToCart: (product: Product, storeName: string, storeWhatsapp: string, customQuantity?: { type: 'weight' | 'value'; amount: number; displayLabel?: string }) => void;
   removeFromCart: (productId: string) => void;
-  updateQuantity: (productId: string, quantity: number) => void;
+  updateQuantity: (productId: string, quantity: number, customQuantity?: { type: 'weight' | 'value'; amount: number; displayLabel?: string }) => void;
   clearCart: () => void;
   getTotal: () => number;
   getItemCount: () => number;
@@ -17,19 +17,43 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
 
-  const addToCart = useCallback((product: Product, storeName: string, storeWhatsapp: string) => {
+  const addToCart = useCallback((product: Product, storeName: string, storeWhatsapp: string, customQuantity?: { type: 'weight' | 'value'; amount: number; displayLabel?: string }) => {
     setItems(prev => {
-      const existingItem = prev.find(item => item.product.id === product.id);
+      const existingItem = prev.find(item => {
+        if (item.product.id !== product.id) return false;
+        // Se ambos têm customQuantity, comparar
+        if (customQuantity && item.customQuantity) {
+          return item.customQuantity.type === customQuantity.type && 
+                 item.customQuantity.amount === customQuantity.amount;
+        }
+        // Se nenhum tem customQuantity, são iguais
+        return !customQuantity && !item.customQuantity;
+      });
       
       if (existingItem) {
-        return prev.map(item =>
-          item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
+        return prev.map(item => {
+          if (item.product.id === product.id) {
+            // Verificar se é o mesmo item (mesmo customQuantity)
+            const isSameItem = customQuantity && item.customQuantity
+              ? item.customQuantity.type === customQuantity.type && 
+                item.customQuantity.amount === customQuantity.amount
+              : !customQuantity && !item.customQuantity;
+            
+            if (isSameItem) {
+              return { ...item, quantity: item.quantity + 1 };
+            }
+          }
+          return item;
+        });
       }
       
-      return [...prev, { product, quantity: 1, storeName, storeWhatsapp }];
+      return [...prev, { 
+        product, 
+        quantity: 1, 
+        storeName, 
+        storeWhatsapp,
+        customQuantity 
+      }];
     });
   }, []);
 
@@ -37,18 +61,28 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems(prev => prev.filter(item => item.product.id !== productId));
   }, []);
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
+  const updateQuantity = useCallback((productId: string, quantity: number, customQuantity?: { type: 'weight' | 'value'; amount: number; displayLabel?: string }) => {
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
     }
     
     setItems(prev =>
-      prev.map(item =>
-        item.product.id === productId
-          ? { ...item, quantity }
-          : item
-      )
+      prev.map(item => {
+        if (item.product.id === productId) {
+          // Se tem customQuantity, precisa verificar se é o mesmo item
+          if (customQuantity && item.customQuantity) {
+            const isSameItem = item.customQuantity.type === customQuantity.type && 
+                             item.customQuantity.amount === customQuantity.amount;
+            if (isSameItem) {
+              return { ...item, quantity };
+            }
+          } else if (!customQuantity && !item.customQuantity) {
+            return { ...item, quantity };
+          }
+        }
+        return item;
+      })
     );
   }, [removeFromCart]);
 
@@ -57,7 +91,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const getTotal = useCallback(() => {
-    return items.reduce((total, item) => total + (item.product.price * item.quantity), 0);
+    return items.reduce((total, item) => {
+      if (item.customQuantity) {
+        if (item.customQuantity.type === 'weight') {
+          // Se for por peso, calcular baseado no peso
+          if (item.product.weightUnit === 'g') {
+            // Preço é por 100g, então calcular baseado em quantos "100g" o cliente quer
+            const priceForWeight = item.product.price * (item.customQuantity.amount / 100);
+            return total + (priceForWeight * item.quantity);
+          } else {
+            // Preço é por kg
+            const weightInKg = item.customQuantity.amount / 1000; // converter gramas para kg
+            return total + (item.product.price * weightInKg * item.quantity);
+          }
+        } else if (item.customQuantity.type === 'value') {
+          // Se for por valor, o valor que o cliente escolheu é o preço que ele vai pagar
+          const valueAmount = item.customQuantity.amount;
+          return total + (valueAmount * item.quantity);
+        }
+      }
+      return total + (item.product.price * item.quantity);
+    }, 0);
   }, [items]);
 
   const getItemCount = useCallback(() => {
@@ -70,9 +124,46 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const storeWhatsapp = items[0].storeWhatsapp;
     const storeName = items[0].storeName;
     
-    const itemsList = items
-      .map(item => `${item.quantity}x ${item.product.name} (R$ ${(item.product.price * item.quantity).toFixed(2)})`)
-      .join('\n');
+    const itemsList = items.map(item => {
+      let itemText = '';
+      let itemPrice = 0;
+      
+      if (item.customQuantity) {
+        if (item.customQuantity.type === 'weight') {
+          // Para produtos por peso: mostrar peso x produto
+          const weightLabel = item.customQuantity.displayLabel || 
+            (item.product.weightUnit === 'kg' 
+              ? `${item.customQuantity.amount / 1000}kg` 
+              : `${item.customQuantity.amount}g`);
+          itemText = `${weightLabel} x ${item.product.name}`;
+          
+          // Calcular preço
+          if (item.product.weightUnit === 'g') {
+            itemPrice = item.product.price * (item.customQuantity.amount / 100) * item.quantity;
+          } else {
+            const weightInKg = item.customQuantity.amount / 1000;
+            itemPrice = item.product.price * weightInKg * item.quantity;
+          }
+        } else if (item.customQuantity.type === 'value') {
+          // Para produtos por valor: calcular quantidade de unidades e mostrar
+          const valueAmount = item.customQuantity.amount;
+          const unitsPerReal = item.product.valueQuantity || 1;
+          const totalUnits = Math.round(valueAmount * unitsPerReal * item.quantity);
+          const unitLabel = item.product.valueLabel || 'unidades';
+          itemText = `${totalUnits} x ${item.product.name}`;
+          
+          // O valor que o cliente escolheu é o preço que ele vai pagar
+          itemPrice = valueAmount * item.quantity;
+        }
+      } else {
+        // Produtos por unidade
+        itemText = `${item.quantity}x ${item.product.name}`;
+        itemPrice = item.product.price * item.quantity;
+      }
+      
+      itemText += `   R$ ${itemPrice.toFixed(2)}`;
+      return itemText;
+    }).join('\n');
     
     const total = getTotal();
     

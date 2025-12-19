@@ -130,7 +130,7 @@ export default function AddressesPage() {
         <header className="sticky top-0 z-40 bg-card border-b p-4">
           <h1 className="font-bold text-lg">Endereços</h1>
         </header>
-        <main className="p-4 space-y-3">
+        <main className="p-4 space-y-3 max-w-6xl mx-auto">
           <Skeleton className="h-32 w-full rounded-xl" />
           <Skeleton className="h-32 w-full rounded-xl" />
         </main>
@@ -272,7 +272,7 @@ export default function AddressesPage() {
         </Dialog>
       </header>
 
-      <main className="p-4 space-y-3">
+      <main className="p-4 space-y-3 max-w-6xl mx-auto">
         {addresses.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center text-muted-foreground">
