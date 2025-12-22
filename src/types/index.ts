@@ -1,4 +1,4 @@
-export type UserRole = 'customer' | 'vendor_product' | 'vendor_service';
+export type UserRole = 'customer' | 'vendor_product' | 'vendor_service' | 'admin';
 
 export interface User {
   uid: string;
@@ -7,6 +7,8 @@ export interface User {
   role: UserRole;
   phone?: string;
   avatarUrl?: string;
+  // Créditos para impulsionamento de anúncios/lojas/serviços
+  promoCredits?: number;
   createdAt: Date;
 }
 
@@ -22,7 +24,14 @@ export interface Store {
   bannerUrl?: string;
   isOpen: boolean;
   rating?: number;
+  whatsappClicks?: number; // Contador de cliques no WhatsApp
+  views?: number; // Contador de visualizações
   createdAt: Date;
+  // Campos de destaque/administração
+  isFeatured?: boolean; // Se está em destaque na página inicial
+  featuredUntil?: Date; // Data até quando está em destaque
+  featuredOrder?: number; // Ordem de exibição (menor = aparece primeiro)
+  isVisible?: boolean; // Se está visível na plataforma (admin pode ocultar)
 }
 
 export type SaleType = 'unit' | 'weight' | 'value'; // unidade, peso (kg/g), valor (R$)
@@ -57,7 +66,13 @@ export interface Service {
   priceRange?: string;
   rating?: number;
   whatsappClicks?: number; // Contador de cliques no WhatsApp
+  views?: number; // Contador de visualizações
   createdAt: Date;
+  // Campos de destaque/administração
+  isFeatured?: boolean; // Se está em destaque na página inicial
+  featuredUntil?: Date; // Data até quando está em destaque
+  featuredOrder?: number; // Ordem de exibição (menor = aparece primeiro)
+  isVisible?: boolean; // Se está visível na plataforma (admin pode ocultar)
 }
 
 export interface Post {
@@ -152,7 +167,7 @@ export interface Favorite {
   createdAt: Date;
 }
 
-export type NotificationType = 'new_order' | 'order_confirmed' | 'order_preparing' | 'order_out_for_delivery' | 'order_delivered' | 'order_cancelled' | 'post_interest';
+export type NotificationType = 'new_order' | 'order_confirmed' | 'order_preparing' | 'order_out_for_delivery' | 'order_delivered' | 'order_cancelled' | 'post_interest' | 'admin_message' | 'global_message';
 
 export interface Notification {
   id: string;
@@ -163,4 +178,21 @@ export interface Notification {
   orderId?: string;
   read: boolean;
   createdAt: Date;
+}
+
+export type CreditRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface CreditRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  amount: number; // Valor pago em reais
+  credits: number; // Créditos solicitados (1 real = 1 crédito)
+  proofImageUrl: string; // URL da imagem do comprovante
+  status: CreditRequestStatus;
+  createdAt: Date;
+  reviewedBy?: string; // ID do admin que revisou
+  reviewedAt?: Date;
+  rejectionReason?: string; // Motivo da rejeição, se houver
 }

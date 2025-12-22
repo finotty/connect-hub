@@ -37,7 +37,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (fbUser) {
         const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
         if (userDoc.exists()) {
-          setUser(userDoc.data() as User);
+          let userData = userDoc.data() as User;
+          
+          // Se o email for admin@adm.com, garantir que o role seja 'admin'
+          if (fbUser.email === 'admin@adm.com' && userData.role !== 'admin') {
+            await setDoc(doc(db, 'users', fbUser.uid), { role: 'admin' }, { merge: true });
+            userData = { ...userData, role: 'admin' };
+          }
+          
+          setUser(userData);
         } else {
           setUser(null);
         }
@@ -51,7 +59,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    const { user: fbUser } = await signInWithEmailAndPassword(auth, email, password);
+
+    const userRef = doc(db, 'users', fbUser.uid);
+    const userDoc = await getDoc(userRef);
+    const isAdminEmail = fbUser.email === 'admin@adm.com';
+
+    if (!userDoc.exists()) {
+      // Se não existir documento do usuário, criar um com role adequado
+      const newUser: User = {
+        uid: fbUser.uid,
+        name: fbUser.displayName || (isAdminEmail ? 'Administrador' : 'Usuário'),
+        email: fbUser.email!,
+        role: isAdminEmail ? 'admin' : 'customer',
+        // Começa sem créditos de impulsionamento
+        promoCredits: 0,
+        createdAt: new Date()
+      };
+
+      await setDoc(userRef, {
+        ...newUser,
+        createdAt: serverTimestamp()
+      }, { merge: true });
+
+      setUser(newUser);
+      return;
+    }
+
+    let userData = userDoc.data() as User;
+
+    // Se o email for admin@adm.com, garantir que o role seja 'admin'
+    if (isAdminEmail && userData.role !== 'admin') {
+      await setDoc(userRef, { role: 'admin' }, { merge: true });
+      userData = { ...userData, role: 'admin' };
+    }
+
+    setUser(userData);
   };
 
   const signUp = async (email: string, password: string, name: string, phone: string) => {
@@ -64,12 +107,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Remove formatação do telefone para armazenar apenas números
     const cleanPhone = phone.replace(/\D/g, '');
     
+    // Determinar o role inicial baseado no email
+    const initialRole = email === 'admin@adm.com' ? 'admin' : 'customer';
+    
     const userData: User = {
       uid: fbUser.uid,
       name,
       email: fbUser.email!,
-      role: 'customer',
+      role: initialRole,
       phone: cleanPhone,
+      promoCredits: 0,
       createdAt: new Date()
     };
 
@@ -86,13 +133,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     const userDoc = await getDoc(doc(db, 'users', fbUser.uid));
     
+    // Determinar o role inicial baseado no email
+    const initialRole = fbUser.email === 'admin@adm.com' ? 'admin' : 'customer';
+    
     if (!userDoc.exists()) {
       const userData: User = {
         uid: fbUser.uid,
         name: fbUser.displayName || 'Usuário',
         email: fbUser.email!,
-        role: 'customer',
+        role: initialRole,
         avatarUrl: fbUser.photoURL || undefined,
+        promoCredits: 0,
         createdAt: new Date()
       };
 
@@ -103,7 +154,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       setUser(userData);
     } else {
-      setUser(userDoc.data() as User);
+      let userData = userDoc.data() as User;
+      
+      // Se o email for admin@adm.com, garantir que o role seja 'admin'
+      if (fbUser.email === 'admin@adm.com' && userData.role !== 'admin') {
+        await setDoc(doc(db, 'users', fbUser.uid), { role: 'admin' }, { merge: true });
+        userData = { ...userData, role: 'admin' };
+      }
+      
+      setUser(userData);
     }
   };
 

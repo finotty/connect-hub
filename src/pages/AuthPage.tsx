@@ -28,7 +28,12 @@ export default function AuthPage() {
       if (isLogin) {
         await signIn(email, password);
         toast({ title: "Bem-vindo de volta!" });
-        navigate('/');
+        // Se for o admin, levar direto para o painel administrativo
+        if (email === 'admin@adm.com') {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
       } else {
         if (!phone.trim()) {
           toast({

@@ -29,11 +29,59 @@ export default function SearchPage() {
     try {
       const storesQuery = query(collection(db, 'stores'), orderBy('createdAt', 'desc'));
       const storesSnapshot = await getDocs(storesQuery);
-      setStores(storesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Store)));
+      let storesData = storesSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        featuredUntil: doc.data().featuredUntil?.toDate()
+      } as Store));
+      
+      // Filtrar apenas visíveis
+      storesData = storesData.filter(store => store.isVisible !== false);
+      
+      // Ordenar: primeiro destacados, depois por data
+      storesData.sort((a, b) => {
+        const now = new Date();
+        const aIsFeatured = a.isFeatured && (!a.featuredUntil || a.featuredUntil > now);
+        const bIsFeatured = b.isFeatured && (!b.featuredUntil || b.featuredUntil > now);
+        
+        if (aIsFeatured && !bIsFeatured) return -1;
+        if (!aIsFeatured && bIsFeatured) return 1;
+        if (aIsFeatured && bIsFeatured) {
+          return (a.featuredOrder || 999) - (b.featuredOrder || 999);
+        }
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+      
+      setStores(storesData);
 
       const servicesQuery = query(collection(db, 'services'), orderBy('createdAt', 'desc'));
       const servicesSnapshot = await getDocs(servicesQuery);
-      setServices(servicesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service)));
+      let servicesData = servicesSnapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        featuredUntil: doc.data().featuredUntil?.toDate()
+      } as Service));
+      
+      // Filtrar apenas visíveis
+      servicesData = servicesData.filter(service => service.isVisible !== false);
+      
+      // Ordenar: primeiro destacados, depois por data
+      servicesData.sort((a, b) => {
+        const now = new Date();
+        const aIsFeatured = a.isFeatured && (!a.featuredUntil || a.featuredUntil > now);
+        const bIsFeatured = b.isFeatured && (!b.featuredUntil || b.featuredUntil > now);
+        
+        if (aIsFeatured && !bIsFeatured) return -1;
+        if (!aIsFeatured && bIsFeatured) return 1;
+        if (aIsFeatured && bIsFeatured) {
+          return (a.featuredOrder || 999) - (b.featuredOrder || 999);
+        }
+        return b.createdAt.getTime() - a.createdAt.getTime();
+      });
+      
+      setServices(servicesData);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {

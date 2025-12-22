@@ -10,7 +10,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { 
   User, Settings, LogOut, ChevronRight, Store, Wrench, 
-  ShoppingBag, Heart, Bell, HelpCircle, MapPin, Camera
+  ShoppingBag, Heart, Bell, HelpCircle, MapPin, Camera, Shield
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,6 +60,12 @@ export default function ProfilePage() {
   };
 
   const menuItems = [
+    ...(user?.role === 'admin' ? [{
+      icon: Shield,
+      label: 'Painel Administrativo',
+      path: '/admin',
+      badge: null
+    }] : []),
     { 
       icon: user?.role?.startsWith('vendor') ? Store : ShoppingBag, 
       label: user?.role?.startsWith('vendor') ? 'Painel do Parceiro' : 'Meus Pedidos', 

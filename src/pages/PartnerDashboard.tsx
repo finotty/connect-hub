@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { BottomNav } from '@/components/layout/BottomNav';
@@ -22,7 +23,7 @@ import {
   ArrowLeft, Plus, Edit, Trash2, Store as StoreIcon, 
   Phone, MapPin, Upload, Package, Image as ImageIcon, Wrench,
   ShoppingBag, Clock, CheckCircle, Truck, XCircle, Camera,
-  BarChart3, TrendingUp, DollarSign, Search, Calendar, ChevronDown, ChevronUp
+  BarChart3, TrendingUp, DollarSign, Search, Calendar, ChevronDown, ChevronUp, Star, AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, startOfDay, endOfDay, isSameDay, parseISO } from 'date-fns';
@@ -31,7 +32,7 @@ import { ptBR } from 'date-fns/locale';
 export default function PartnerDashboard() {
   console.log('🏪 PartnerDashboard component rendered');
   
-  const { user } = useAuth();
+  const { user, updateUserProfile } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -73,6 +74,7 @@ export default function PartnerDashboard() {
   const [statsCustomDate, setStatsCustomDate] = useState<Date | null>(null);
   const [isStatsExpanded, setIsStatsExpanded] = useState(false);
   const [isPersonalizationExpanded, setIsPersonalizationExpanded] = useState(false);
+  const [isCreditsExpanded, setIsCreditsExpanded] = useState(false);
   const [isProductsExpanded, setIsProductsExpanded] = useState(false);
   const [isPostsExpanded, setIsPostsExpanded] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
@@ -88,9 +90,21 @@ export default function PartnerDashboard() {
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const proofImageInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados para envio de comprovante de pagamento
+  const [proofAmount, setProofAmount] = useState('');
+  const [proofImageFile, setProofImageFile] = useState<File | null>(null);
+  const [proofImagePreview, setProofImagePreview] = useState<string>('');
+  const [uploadingProof, setUploadingProof] = useState(false);
 
   const isVendorProduct = user?.role === 'vendor_product';
   const isVendorService = user?.role === 'vendor_service';
+  const promoCredits = user?.promoCredits ?? 0;
+  const PIX_KEY = 'fd16ea49-5daf-49d5-8f7b-f3a05bfe8030';
+  const PIX_PAYMENT_CODE =
+    '00020126580014br.gov.bcb.pix0136bc0491b5-9f39-46dd-a3d0-a46b5b1e5eb55204000053039865802BR5922Hugo Dos Santos Finote6009Sao Paulo610901227-20062230519daqr12629188513144463044182';
+  const pixQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(PIX_PAYMENT_CODE)}`;
 
   // Buscar categorias existentes
   useEffect(() => {
@@ -282,7 +296,13 @@ export default function PartnerDashboard() {
         console.log('📦 Stores found:', storesSnapshot.docs.length);
         
         if (!storesSnapshot.empty) {
-          const storeData = { id: storesSnapshot.docs[0].id, ...storesSnapshot.docs[0].data() } as Store;
+          const data = storesSnapshot.docs[0].data();
+          const storeData = { 
+            id: storesSnapshot.docs[0].id, 
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            featuredUntil: data.featuredUntil?.toDate() || undefined
+          } as Store;
           console.log('✅ Store found:', storeData.id, storeData.name);
           console.log('🔍 Store data:', { id: storeData.id, name: storeData.name, ownerId: storeData.ownerId });
           setStore(storeData);
@@ -303,7 +323,13 @@ export default function PartnerDashboard() {
         const servicesQuery = query(collection(db, 'services'), where('ownerId', '==', user.uid));
         const servicesSnapshot = await getDocs(servicesQuery);
         if (!servicesSnapshot.empty) {
-          const serviceData = { id: servicesSnapshot.docs[0].id, ...servicesSnapshot.docs[0].data() } as Service;
+          const data = servicesSnapshot.docs[0].data();
+          const serviceData = { 
+            id: servicesSnapshot.docs[0].id, 
+            ...data,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            featuredUntil: data.featuredUntil?.toDate() || undefined
+          } as Service;
           setService(serviceData);
           
           // Buscar posts do serviço
@@ -415,6 +441,100 @@ export default function PartnerDashboard() {
       toast({ title: store.isOpen ? "Loja fechada" : "Loja aberta" });
     } catch (error) {
       toast({ title: "Erro ao atualizar", variant: "destructive" });
+    }
+  };
+
+  const handlePromoteOwnStore = async () => {
+    if (!store || !user) return;
+
+    const credits = user.promoCredits ?? 0;
+    if (credits < 7) {
+      toast({
+        title: "Sem créditos",
+        description: "Você precisa de pelo menos 7 créditos para impulsionar a loja.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const featuredUntil = new Date();
+      featuredUntil.setDate(featuredUntil.getDate() + 7);
+
+      await updateDoc(doc(db, 'stores', store.id), {
+        isFeatured: true,
+        featuredUntil,
+        featuredOrder: 50,
+        isVisible: true
+      });
+
+      await updateUserProfile({
+        promoCredits: credits - 7
+      });
+
+      setStore({ ...store, isFeatured: true, featuredUntil });
+
+      toast({
+        title: "Loja impulsionada!",
+        description: "Sua loja ficará em destaque na página inicial por 7 dias."
+      });
+    } catch (error) {
+      console.error('Error promoting store:', error);
+      toast({
+        title: "Erro ao impulsionar loja",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePromoteOwnService = async () => {
+    if (!service || !user) return;
+
+    const credits = user.promoCredits ?? 0;
+    if (credits < 7) {
+      toast({
+        title: "Sem créditos",
+        description: "Você precisa de pelo menos 7 créditos para impulsionar o serviço.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const featuredUntil = new Date();
+      featuredUntil.setDate(featuredUntil.getDate() + 7);
+
+      await updateDoc(doc(db, 'services', service.id), {
+        isFeatured: true,
+        featuredUntil,
+        featuredOrder: 50,
+        isVisible: true
+      });
+
+      await updateUserProfile({
+        promoCredits: credits - 7
+      });
+
+      setService({ ...service, isFeatured: true, featuredUntil });
+
+      toast({
+        title: "Serviço impulsionado!",
+        description: "Seu serviço ficará em destaque na página inicial por 7 dias."
+      });
+    } catch (error) {
+      console.error('Error promoting service:', error);
+      toast({
+        title: "Erro ao impulsionar serviço",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -534,6 +654,120 @@ export default function PartnerDashboard() {
     setEditingProduct(null);
     setProductImageFile(null);
     setProductImagePreview('');
+  };
+
+  const handlePromoteOwnPost = async (postId: string) => {
+    if (!user) return;
+
+    const credits = user.promoCredits ?? 0;
+    if (credits < 7) {
+      toast({
+        title: "Sem créditos",
+        description: "Você precisa de pelo menos 7 créditos para impulsionar este anúncio.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const promotionEndsAt = new Date();
+      promotionEndsAt.setDate(promotionEndsAt.getDate() + 7);
+
+      await updateDoc(doc(db, 'posts', postId), {
+        isPromoted: true,
+        promotionEndsAt,
+        updatedAt: serverTimestamp()
+      });
+
+      await updateUserProfile({
+        promoCredits: credits - 7
+      });
+
+      setPosts(prev =>
+        prev.map(p =>
+          p.id === postId ? { ...p, isPromoted: true, promotionEndsAt } : p
+        )
+      );
+
+      toast({
+        title: "Anúncio impulsionado!",
+        description: "Este anúncio ficará com selo de impulsionado por 7 dias."
+      });
+    } catch (error) {
+      console.error('Error promoting post:', error);
+      toast({
+        title: "Erro ao impulsionar anúncio",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSubmitProof = async () => {
+    if (!user || !proofAmount || !proofImageFile) {
+      toast({
+        title: "Preencha todos os campos",
+        description: "Informe o valor pago e anexe o comprovante.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const amount = parseFloat(proofAmount);
+    if (isNaN(amount) || amount < 10) {
+      toast({
+        title: "Valor inválido",
+        description: "O valor mínimo é R$ 10,00.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setUploadingProof(true);
+
+      // Upload da imagem do comprovante
+      const fileRef = ref(storage, `credit-proofs/${user.uid}/${Date.now()}_${proofImageFile.name}`);
+      await uploadBytes(fileRef, proofImageFile);
+      const proofImageUrl = await getDownloadURL(fileRef);
+
+      // Criar solicitação de crédito
+      await addDoc(collection(db, 'creditRequests'), {
+        userId: user.uid,
+        userName: user.name,
+        userEmail: user.email,
+        amount: amount,
+        credits: Math.floor(amount), // 1 real = 1 crédito
+        proofImageUrl: proofImageUrl,
+        status: 'pending',
+        createdAt: serverTimestamp()
+      });
+
+      toast({
+        title: "Comprovante enviado!",
+        description: "Aguarde a aprovação do administrador. Você receberá uma notificação quando os créditos forem adicionados."
+      });
+
+      // Limpar formulário
+      setProofAmount('');
+      setProofImageFile(null);
+      setProofImagePreview('');
+      if (proofImageInputRef.current) {
+        proofImageInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Error submitting proof:', error);
+      toast({
+        title: "Erro ao enviar comprovante",
+        description: "Tente novamente mais tarde.",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingProof(false);
+    }
   };
 
   const openEditProduct = (product: Product) => {
@@ -721,6 +955,215 @@ export default function PartnerDashboard() {
       </header>
 
       <main className="p-4 space-y-4 max-w-6xl mx-auto">
+        {/* Créditos de Impulsionamento */}
+        <Card>
+          <CardHeader className="pb-2">
+            <button
+              onClick={() => setIsCreditsExpanded(!isCreditsExpanded)}
+              className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Créditos para impulsionar
+              </CardTitle>
+              {isCreditsExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          </CardHeader>
+          {isCreditsExpanded && (
+            <CardContent className="space-y-4 text-sm">
+            {/* Aviso sobre créditos não resgatáveis */}
+            <Alert variant="destructive" className="border-orange-500/50 bg-orange-500/10">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertTitle className="text-orange-700 font-semibold">Atenção: Créditos não são resgatáveis</AlertTitle>
+              <AlertDescription className="text-orange-700/90 mt-1">
+                Uma vez enviado o comprovante de pagamento e os créditos forem adicionados à sua conta, 
+                eles <strong>não podem ser resgatados em dinheiro</strong>. Os créditos podem ser utilizados 
+                <strong> apenas para impulsionamento</strong> de lojas, serviços ou anúncios na plataforma.
+              </AlertDescription>
+            </Alert>
+
+            <p>
+              Saldo disponível:{' '}
+              <span className="font-semibold">
+                {promoCredits.toFixed(0)} crédito(s)
+              </span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Cada <strong>R$ 1,00</strong> recarregado vira <strong>1 crédito</strong> no app.
+              Recomenda-se um valor mínimo de <strong>R$ 10,00</strong> por recarga.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Cada impulsionamento (loja, serviço ou anúncio) consome <strong>7 créditos</strong> e
+              deixa em destaque por <strong>7 dias</strong>.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Exemplo: se você recarregar <strong>R$ 20,00</strong>, terá <strong>20 créditos</strong>,
+              podendo impulsionar até <strong>2 vezes</strong> (ou combinar entre loja, serviço e anúncios).
+            </p>
+            <div className="mt-2 p-3 rounded-md bg-secondary/60 text-xs text-muted-foreground space-y-2">
+              <p className="font-semibold">Como adicionar créditos via Pix?</p>
+              <p>
+                Escaneie o QR Code abaixo ou use a chave Pix aleatória da plataforma. Após o pagamento,
+                o administrador irá creditar os créditos na sua conta.
+              </p>
+              <div className="mt-2 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <div className="bg-background p-2 rounded-lg border">
+                  <img
+                    src={pixQrUrl}
+                    alt="QR Code Pix para créditos"
+                    className="h-32 w-32 object-contain"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <p>
+                    <span className="font-semibold">Chave Pix (aleatória):</span>{' '}
+                    <span className="break-all">{PIX_KEY}</span>
+                  </p>
+                  <p className="mt-1">
+                    <span className="font-semibold">Código Pix (copia e cola):</span>
+                    <span className="block break-all mt-0.5 text-[11px]">
+                      {PIX_PAYMENT_CODE}
+                    </span>
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(PIX_PAYMENT_CODE);
+                          toast({ title: "Código Pix copiado!" });
+                        } catch (error) {
+                          toast({
+                            title: "Erro ao copiar",
+                            description: "Copie manualmente se o navegador bloquear o acesso à área de transferência.",
+                            variant: "destructive"
+                          });
+                        }
+                      }}
+                    >
+                      Copiar código Pix
+                    </Button>
+                  </div>
+                  <p className="mt-1 italic">
+                    (Neste App os créditos são liberados manualmente pelo administrador no painel.)
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Formulário de envio de comprovante */}
+            <div className="mt-4 p-3 rounded-md border border-dashed space-y-3">
+              <p className="font-semibold text-sm">Enviar comprovante de pagamento</p>
+              <p className="text-xs text-muted-foreground">
+                Após realizar o pagamento via Pix, envie o comprovante para agilizar a liberação dos créditos.
+              </p>
+              
+              <div className="space-y-2">
+                <div>
+                  <Label htmlFor="proof-amount" className="text-xs">Valor pago (R$)</Label>
+                  <Input
+                    id="proof-amount"
+                    type="number"
+                    step="0.01"
+                    min="10"
+                    placeholder="Ex: 20.00"
+                    value={proofAmount}
+                    onChange={(e) => setProofAmount(e.target.value)}
+                    disabled={uploadingProof}
+                    className="mt-1"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="proof-image" className="text-xs">Comprovante (imagem)</Label>
+                  <div className="mt-1 space-y-2">
+                    {proofImagePreview ? (
+                      <div className="relative">
+                        <img
+                          src={proofImagePreview}
+                          alt="Preview do comprovante"
+                          className="w-full max-w-xs h-32 object-contain border rounded-md"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute top-1 right-1"
+                          onClick={() => {
+                            setProofImagePreview('');
+                            setProofImageFile(null);
+                            if (proofImageInputRef.current) {
+                              proofImageInputRef.current.value = '';
+                            }
+                          }}
+                        >
+                          <XCircle className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => proofImageInputRef.current?.click()}
+                        disabled={uploadingProof}
+                        className="w-full"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Selecionar comprovante
+                      </Button>
+                    )}
+                    <input
+                      ref={proofImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setProofImageFile(file);
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setProofImagePreview(reader.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+                
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleSubmitProof}
+                  disabled={uploadingProof || !proofAmount || !proofImageFile}
+                  className="w-full"
+                >
+                  {uploadingProof ? (
+                    <>
+                      <Clock className="h-4 w-4 mr-2 animate-spin" />
+                      Enviando...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Enviar comprovante
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            </CardContent>
+          )}
+        </Card>
+
         {/* Statistics Dashboard */}
         {isVendorProduct && store && (
           <Card>
@@ -1043,6 +1486,56 @@ export default function PartnerDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Impulsionar Loja/Serviço */}
+        {(isVendorProduct && store) || (isVendorService && service) ? (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Star className="h-4 w-4" />
+                Impulsionar visibilidade
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="text-xs text-muted-foreground">
+                Use seus créditos para colocar  {isVendorProduct ? 'sua loja' : 'seu serviço'} em destaque na página inicial por 7 dias.
+              </p>
+              {isVendorProduct && store && store.isFeatured && store.createdAt && (
+                <p className="text-xs text-primary">
+                  Sua loja já está em destaque até{' '}
+                  {store.featuredUntil && store.featuredUntil instanceof Date && !isNaN(store.featuredUntil.getTime())
+                    ? format(store.featuredUntil, "dd/MM/yyyy", { locale: ptBR })
+                    : 'data indefinida'}
+                </p>
+              )}
+              {isVendorService && service && service.isFeatured && (
+                <p className="text-xs text-primary">
+                  Seu serviço já está em destaque até{' '}
+                  {service.featuredUntil && service.featuredUntil instanceof Date && !isNaN(service.featuredUntil.getTime())
+                    ? format(service.featuredUntil, "dd/MM/yyyy", { locale: ptBR })
+                    : 'data indefinida'}
+                </p>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                className="mt-1"
+                disabled={saving || promoCredits < 7}
+                onClick={() => {
+                  if (isVendorProduct) {
+                    handlePromoteOwnStore();
+                  } else {
+                    handlePromoteOwnService();
+                  }
+                }}
+              >
+                {promoCredits < 7
+                  ? 'Sem créditos para impulsionar'
+                  : `Impulsionar por 7 dias (7 créditos)`}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* Service Edit Section */}
         {isVendorService && service && (
@@ -1810,6 +2303,18 @@ export default function PartnerDashboard() {
                               <Trash2 className="h-4 w-4 mr-1" />
                               Excluir
                             </Button>
+                          {!post.isPromoted && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={saving || promoCredits < 7}
+                              onClick={() => handlePromoteOwnPost(post.id)}
+                            >
+                              {promoCredits < 7
+                                ? 'Sem créditos'
+                                : 'Impulsionar (7 créditos / 7 dias)'}
+                            </Button>
+                          )}
                           </div>
                         </CardContent>
                       </Card>

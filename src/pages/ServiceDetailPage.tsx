@@ -303,10 +303,20 @@ export default function ServiceDetailPage() {
             )}
 
             {service.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
                 {service.description}
               </p>
             )}
+
+            {/* Botão WhatsApp */}
+            <Button
+              variant="whatsapp"
+              className="w-full mt-3"
+              onClick={handleWhatsAppClick}
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Entrar em contato via WhatsApp
+            </Button>
           </CardContent>
         </Card>
 
@@ -348,19 +358,6 @@ export default function ServiceDetailPage() {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Fixed CTA */}
-      <div className="fixed bottom-20 left-0 right-0 p-4 bg-gradient-to-t from-background via-background to-transparent">
-        <Button 
-          variant="whatsapp"
-          size="xl"
-          className="w-full"
-          onClick={handleWhatsAppClick}
-        >
-          <MessageCircle className="h-5 w-5 mr-2" />
-          Chamar no WhatsApp
-        </Button>
       </div>
 
       <BottomNav />

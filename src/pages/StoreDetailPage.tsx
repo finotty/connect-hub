@@ -442,6 +442,35 @@ export default function StoreDetailPage() {
                 </span>
               )}
             </div>
+
+            {/* Botão WhatsApp */}
+            <Button
+              variant="whatsapp"
+              className="w-full mt-3"
+              onClick={async () => {
+                if (!store) return;
+                
+                // Registra o clique no WhatsApp
+                try {
+                  const storeRef = doc(db, 'stores', store.id);
+                  await updateDoc(storeRef, {
+                    whatsappClicks: increment(1)
+                  });
+                  // Atualizar estado local
+                  setStore({ ...store, whatsappClicks: (store.whatsappClicks || 0) + 1 });
+                } catch (error) {
+                  console.error('Error tracking WhatsApp click:', error);
+                  // Não bloqueia a abertura do WhatsApp se o tracking falhar
+                }
+                
+                const message = `Olá! Vi sua loja "${store.name}" no App do Bairro e gostaria de saber mais sobre seus produtos.`;
+                const url = `https://wa.me/55${store.whatsappNumber.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+                window.open(url, '_blank');
+              }}
+            >
+              <Phone className="h-4 w-4 mr-2" />
+              Entrar em contato via WhatsApp
+            </Button>
           </CardContent>
         </Card>
 
