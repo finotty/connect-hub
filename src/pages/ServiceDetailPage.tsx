@@ -9,7 +9,8 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Star, Phone, Wrench, MessageCircle, Heart, TrendingUp, Eye } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { ArrowLeft, Star, Phone, Wrench, MessageCircle, Heart, TrendingUp, Eye, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generatePostInterestWhatsApp, generateWhatsAppUrl } from '@/lib/whatsapp';
 import { useAuth } from '@/contexts/AuthContext';
@@ -82,10 +83,10 @@ function PostCard({ post, service }: { post: Post; service: Service }) {
   };
   
   return (
-    <Card className={cn(post.isPromoted && "border-primary/50 bg-primary/5", "max-w-2xl mx-auto")}>
-      <CardContent className="p-4">
+    <Card className={cn(post.isPromoted && "border-primary/50 bg-primary/5")}>
+      <CardContent className="p-3">
         {post.imageUrl && (
-          <div className="h-48 sm:h-64 md:h-72 rounded-lg bg-secondary overflow-hidden mb-3">
+          <div className="h-32 sm:h-40 md:h-48 rounded-lg bg-secondary overflow-hidden mb-2">
             <img 
               src={post.imageUrl} 
               alt={post.title} 
@@ -93,19 +94,19 @@ function PostCard({ post, service }: { post: Post; service: Service }) {
             />
           </div>
         )}
-        <div className="flex items-start justify-between mb-2">
-          <h3 className="font-semibold text-base">{post.title}</h3>
+        <div className="flex items-start justify-between mb-1.5">
+          <h3 className="font-semibold text-sm">{post.title}</h3>
           {post.isPromoted && (
-            <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary font-medium">
-              ⭐ Impulsionado
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+              ⭐ Patrocinado
             </span>
           )}
         </div>
-        <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+        <p className="text-xs text-muted-foreground leading-relaxed mb-2 line-clamp-2">
           {post.content}
         </p>
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
             <span className="flex items-center gap-1">
               <Eye className="h-3 w-3" />
               {post.views || 0}
@@ -116,8 +117,9 @@ function PostCard({ post, service }: { post: Post; service: Service }) {
             size="sm"
             variant="whatsapp"
             onClick={handleAproveitar}
+            className="text-xs h-7 px-2"
           >
-            <MessageCircle className="h-4 w-4 mr-1" />
+            <MessageCircle className="h-3 w-3 mr-1" />
             Aproveitar
           </Button>
         </div>
@@ -131,7 +133,8 @@ export default function ServiceDetailPage() {
   const [service, setService] = useState<Service | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
   const { isFavorite, toggleFavorite } = useFavorites();
   const { toast } = useToast();
 
@@ -239,9 +242,9 @@ export default function ServiceDetailPage() {
           />
         ) : service.portfolioImages?.[0] ? (
           <img 
-            src={selectedImage || service.portfolioImages[0]} 
+            src={service.portfolioImages[0]} 
             alt={service.title} 
-            className="h-full w-full object-cover object-center transition-all duration-300"
+            className="h-full w-full object-cover object-center"
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-primary/10">
@@ -324,14 +327,15 @@ export default function ServiceDetailPage() {
         {service.portfolioImages && service.portfolioImages.length > 0 && (
           <div className="mb-4">
             <h2 className="font-bold text-lg mb-3">Trabalhos realizados</h2>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 max-w-md md:max-w-lg lg:max-w-xl mx-auto">
               {service.portfolioImages.map((image, index) => (
                 <button
                   key={index}
-                  onClick={() => setSelectedImage(image)}
-                  className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedImage === image ? 'border-primary' : 'border-transparent'
-                  }`}
+                  onClick={() => {
+                    setSelectedImageIndex(index);
+                    setImageModalOpen(true);
+                  }}
+                  className="aspect-square rounded-lg overflow-hidden border-2 border-transparent hover:border-primary transition-all"
                 >
                   <img 
                     src={image} 
@@ -344,6 +348,68 @@ export default function ServiceDetailPage() {
           </div>
         )}
 
+        {/* Modal de visualização de imagem */}
+        <Dialog open={imageModalOpen} onOpenChange={setImageModalOpen}>
+          <DialogContent className="max-w-4xl w-full p-0 bg-black/95 border-none">
+            <div className="relative">
+              {service.portfolioImages && selectedImageIndex !== null && (
+                <>
+                  <button
+                    onClick={() => setImageModalOpen(false)}
+                    className="absolute top-4 right-4 z-10 h-10 w-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                  
+                  {service.portfolioImages.length > 1 && (
+                    <>
+                      {selectedImageIndex > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImageIndex(selectedImageIndex - 1);
+                          }}
+                          className="absolute left-4 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+                        >
+                          <ChevronLeft className="h-5 w-5" />
+                        </button>
+                      )}
+                      
+                      {selectedImageIndex < service.portfolioImages.length - 1 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedImageIndex(selectedImageIndex + 1);
+                          }}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 z-10 h-10 w-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors"
+                        >
+                          <ChevronRight className="h-5 w-5" />
+                        </button>
+                      )}
+                    </>
+                  )}
+                  
+                  <div className="flex items-center justify-center min-h-[400px] max-h-[80vh] p-4">
+                    <img 
+                      src={service.portfolioImages[selectedImageIndex]} 
+                      alt={`Trabalho ${selectedImageIndex + 1}`}
+                      className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                    />
+                  </div>
+                  
+                  {service.portfolioImages.length > 1 && (
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+                      <span className="px-3 py-1 rounded-full bg-black/50 text-white text-sm">
+                        {selectedImageIndex + 1} / {service.portfolioImages.length}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Posts/Anúncios */}
         {posts.length > 0 && service && (
           <div className="mb-4">
@@ -351,7 +417,7 @@ export default function ServiceDetailPage() {
               <TrendingUp className="h-5 w-5" />
               Anúncios
             </h2>
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {posts.map(post => (
                 <PostCard key={post.id} post={post} service={service} />
               ))}

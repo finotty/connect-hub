@@ -470,7 +470,7 @@ export default function HomePage() {
               <div>
                 <h3 className="font-bold text-lg flex items-center gap-2">
                   <Star className="h-5 w-5 text-primary" />
-                  Ofertas impulsionadas
+                  Ofertas Patrocinadas
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Anúncios especiais criados por lojas e prestadores do seu bairro
@@ -514,7 +514,7 @@ export default function HomePage() {
                           <div className="absolute top-2 left-2 flex flex-col gap-1">
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground font-semibold flex items-center gap-1 shadow-sm">
                               <Star className="h-3 w-3 fill-primary-foreground" />
-                              Impulsionado
+                              Patrocinado
                             </span>
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-background/80 text-xs text-muted-foreground line-clamp-1">
                               {ownerName}
@@ -728,7 +728,7 @@ export default function HomePage() {
                 <DialogTitle className="text-base flex flex-col gap-1">
                   <span className="text-xs font-medium text-primary flex items-center gap-1">
                     <Star className="h-3 w-3 fill-primary" />
-                    Anúncio impulsionado
+                    Anúncio patrocinado
                   </span>
                   {selectedPost.title}
                 </DialogTitle>

@@ -55,6 +55,12 @@ export default function AdminDashboard() {
   const [promotionDays, setPromotionDays] = useState('7');
   const [userCreditsEditing, setUserCreditsEditing] = useState<Record<string, string>>({});
   const [processingCreditRequest, setProcessingCreditRequest] = useState<string | null>(null);
+  
+  // Estados para controlar expansão das seções
+  const [isCreditsExpanded, setIsCreditsExpanded] = useState(false);
+  const [isStoresExpanded, setIsStoresExpanded] = useState(false);
+  const [isServicesExpanded, setIsServicesExpanded] = useState(false);
+  const [isCreditRequestsExpanded, setIsCreditRequestsExpanded] = useState(false);
 
   useEffect(() => {
     if (user?.role !== 'admin') {
@@ -558,6 +564,20 @@ export default function AdminDashboard() {
     return null;
   }
 
+  // Função para determinar se um item é "novo" (criado nos últimos 7 dias)
+  const isNewItem = (createdAt: Date): boolean => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return createdAt >= sevenDaysAgo;
+  };
+
+  // Contar itens novos
+  const newUsersCount = users.filter(u => u.role !== 'admin' && isNewItem(u.createdAt)).length;
+  const newStoresCount = stores.filter(s => isNewItem(s.createdAt)).length;
+  const newServicesCount = services.filter(s => isNewItem(s.createdAt)).length;
+  // Para solicitações de crédito, contar pendentes ou novas (criadas nos últimos 7 dias)
+  const newCreditRequestsCount = creditRequests.filter(cr => cr.status === 'pending' || (cr.status !== 'pending' && isNewItem(cr.createdAt))).length;
+
   const featuredStores = stores.filter(s => s.isFeatured && (!s.featuredUntil || s.featuredUntil > new Date()));
   const featuredServices = services.filter(s => s.isFeatured && (!s.featuredUntil || s.featuredUntil > new Date()));
   const promotedPosts = posts.filter(p => p.isPromoted && (!p.promotionEndsAt || p.promotionEndsAt > new Date()));
@@ -634,12 +654,28 @@ export default function AdminDashboard() {
         {/* Créditos dos usuários */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              Créditos para impulsionamento (usuários)
-            </CardTitle>
+            <button
+              onClick={() => setIsCreditsExpanded(!isCreditsExpanded)}
+              className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Créditos para impulsionamento (usuários)
+                {newUsersCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                    {newUsersCount}
+                  </span>
+                )}
+              </CardTitle>
+              {isCreditsExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          {isCreditsExpanded && (
+            <CardContent className="space-y-3 text-sm">
             <p className="text-xs text-muted-foreground">
               Defina quantos créditos cada usuário possui para impulsionar sua loja, serviço ou anúncios.
               Recomendação: mínimo de <span className="font-semibold">R$ 10,00</span> por recarga, onde
@@ -694,19 +730,36 @@ export default function AdminDashboard() {
                 Nenhum usuário encontrado ainda.
               </p>
             )}
-          </CardContent>
+            </CardContent>
+          )}
         </Card>
 
         {/* Lojas */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-lg flex items-center gap-2">
-              <StoreIcon className="h-5 w-5" />
-              Lojas ({stores.length})
-            </h2>
-          </div>
-
-          {loading ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <button
+              onClick={() => setIsStoresExpanded(!isStoresExpanded)}
+              className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                <StoreIcon className="h-4 w-4" />
+                Lojas ({stores.length})
+                {newStoresCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                    {newStoresCount}
+                  </span>
+                )}
+              </CardTitle>
+              {isStoresExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          </CardHeader>
+          {isStoresExpanded && (
+            <CardContent>
+              {loading ? (
             <div className="space-y-3">
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-20 w-full" />
@@ -1116,19 +1169,37 @@ export default function AdminDashboard() {
               );
               })}
             </div>
+              )}
+            </CardContent>
           )}
-        </section>
+        </Card>
 
         {/* Serviços */}
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-lg flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
-              Serviços ({services.length})
-            </h2>
-          </div>
-
-          {loading ? (
+        <Card>
+          <CardHeader className="pb-2">
+            <button
+              onClick={() => setIsServicesExpanded(!isServicesExpanded)}
+              className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                <Wrench className="h-4 w-4" />
+                Serviços ({services.length})
+                {newServicesCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                    {newServicesCount}
+                  </span>
+                )}
+              </CardTitle>
+              {isServicesExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+          </CardHeader>
+          {isServicesExpanded && (
+            <CardContent>
+              {loading ? (
             <div className="space-y-3">
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-20 w-full" />
@@ -1530,88 +1601,36 @@ export default function AdminDashboard() {
               );
               })}
             </div>
+              )}
+            </CardContent>
           )}
-        </section>
-
-        {/* Mensagem Global */}
-        <Card className="border-primary/20 bg-primary/5">
-          <CardHeader>
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Send className="h-5 w-5 text-primary" />
-              Mensagem Global
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground mb-4">
-              Envie uma mensagem para todos os usuários da plataforma. Útil para comunicar mudanças importantes, 
-              promoções gerais ou avisos importantes.
-            </p>
-            <Dialog open={globalMessageDialogOpen} onOpenChange={setGlobalMessageDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="default" className="w-full">
-                  <Send className="h-4 w-4 mr-2" />
-                  Enviar mensagem global
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Enviar mensagem global</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <Label htmlFor="global-message-title">Título da mensagem</Label>
-                    <Input
-                      id="global-message-title"
-                      value={messageTitle}
-                      onChange={(e) => setMessageTitle(e.target.value)}
-                      placeholder="Ex: Nova funcionalidade disponível!"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="global-message-content">Mensagem</Label>
-                    <Textarea
-                      id="global-message-content"
-                      value={messageContent}
-                      onChange={(e) => setMessageContent(e.target.value)}
-                      placeholder="Digite sua mensagem aqui..."
-                      rows={6}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Esta mensagem será enviada para todos os usuários da plataforma ({users.filter(u => u.role !== 'admin').length} usuário(s)).
-                  </p>
-                  <Button
-                    onClick={handleSendGlobalMessage}
-                    disabled={sendingMessage}
-                    className="w-full"
-                  >
-                    {sendingMessage ? (
-                      <>
-                        <Clock className="h-4 w-4 mr-2 animate-spin" />
-                        Enviando...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 mr-2" />
-                        Enviar para todos os usuários
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </CardContent>
         </Card>
 
         {/* Solicitações de Crédito */}
-        <Card className="mt-4">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base flex items-center gap-2">
-              <DollarSign className="h-4 w-4" />
-              Solicitações de Crédito
-            </CardTitle>
+            <button
+              onClick={() => setIsCreditRequestsExpanded(!isCreditRequestsExpanded)}
+              className="w-full flex items-center justify-between hover:opacity-80 transition-opacity"
+            >
+              <CardTitle className="text-base flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Solicitações de Crédito
+                {newCreditRequestsCount > 0 && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
+                    {newCreditRequestsCount}
+                  </span>
+                )}
+              </CardTitle>
+              {isCreditRequestsExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
           </CardHeader>
-          <CardContent className="space-y-3 text-sm">
+          {isCreditRequestsExpanded && (
+            <CardContent className="space-y-3 text-sm">
             {creditRequests.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">
                 Nenhuma solicitação de crédito encontrada.
@@ -1724,6 +1743,73 @@ export default function AdminDashboard() {
                 })}
               </div>
             )}
+            </CardContent>
+          )}
+        </Card>
+
+        {/* Mensagem Global */}
+        <Card className="border-muted/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center gap-2 text-muted-foreground font-medium">
+              <Send className="h-3.5 w-3.5" />
+              Mensagem Global
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <Dialog open={globalMessageDialogOpen} onOpenChange={setGlobalMessageDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="w-full">
+                  <Send className="h-3.5 w-3.5 mr-2" />
+                  Enviar mensagem para todos os usuários
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Enviar mensagem global</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 mt-4">
+                  <div>
+                    <Label htmlFor="global-message-title">Título da mensagem</Label>
+                    <Input
+                      id="global-message-title"
+                      value={messageTitle}
+                      onChange={(e) => setMessageTitle(e.target.value)}
+                      placeholder="Ex: Nova funcionalidade disponível!"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="global-message-content">Mensagem</Label>
+                    <Textarea
+                      id="global-message-content"
+                      value={messageContent}
+                      onChange={(e) => setMessageContent(e.target.value)}
+                      placeholder="Digite sua mensagem aqui..."
+                      rows={6}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Esta mensagem será enviada para todos os usuários da plataforma ({users.filter(u => u.role !== 'admin').length} usuário(s)).
+                  </p>
+                  <Button
+                    onClick={handleSendGlobalMessage}
+                    disabled={sendingMessage}
+                    className="w-full"
+                  >
+                    {sendingMessage ? (
+                      <>
+                        <Clock className="h-4 w-4 mr-2 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Enviar para todos os usuários
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
       </main>

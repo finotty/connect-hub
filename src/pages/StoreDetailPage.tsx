@@ -489,75 +489,79 @@ export default function StoreDetailPage() {
         </div>
         
         {availableProducts.length > 0 ? (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-0.5 lg:gap-0">
             {availableProducts.map(product => {
               const quantity = getItemQuantity(product.id);
               
               return (
                 <Card 
                   key={product.id} 
-                  className="overflow-hidden cursor-pointer hover:bg-secondary/50 transition-colors"
+                  className="overflow-hidden cursor-pointer hover:bg-secondary/50 transition-colors flex flex-col w-full sm:w-full md:w-[80%] lg:w-[70%] mx-auto"
                   onClick={() => handleProductClick(product)}
                 >
-                  <CardContent className="p-0">
-                    <div className="flex gap-3 p-3">
-                      <div className="h-24 w-24 rounded-lg bg-secondary flex-shrink-0 overflow-hidden">
+                  <CardContent className="p-0 flex flex-col h-full">
+                    <div className="bg-secondary overflow-hidden relative p-2.5">
+                      <div className="aspect-square max-w-[140px] mx-auto">
                         {product.imageUrl ? (
-                          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover" />
+                          <img src={product.imageUrl} alt={product.name} className="h-full w-full object-cover rounded" />
                         ) : (
-                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50">
-                            <span className="text-3xl">🛒</span>
+                          <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/50 rounded">
+                            <span className="text-2xl">🛒</span>
                           </div>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0 flex flex-col">
-                        <h3 className="font-semibold truncate">{product.name}</h3>
-                        {product.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mb-auto">{product.description}</p>
+                    </div>
+                    <div className="px-2 pb-2 pt-1 flex flex-col flex-1">
+                      <h3 className="font-semibold text-xs mb-1 line-clamp-2">{product.name}</h3>
+                      {product.description && (
+                        <p className="text-[10px] text-muted-foreground line-clamp-2 mb-1.5">{product.description}</p>
+                      )}
+                      <div className="mb-1.5">
+                        <span className="text-primary font-bold text-sm">
+                          R$ {product.saleType === 'weight' ? getPricePerKg(product).toFixed(2) : product.price.toFixed(2)}
+                        </span>
+                        {product.saleType === 'weight' && (
+                          <p className="text-[10px] text-muted-foreground">
+                            por kg
+                          </p>
                         )}
-                        <div className="flex items-center justify-between mt-2">
-                          <div>
-                            <span className="text-primary font-bold">
-                              R$ {product.saleType === 'weight' ? getPricePerKg(product).toFixed(2) : product.price.toFixed(2)}
-                            </span>
-                            {product.saleType === 'weight' && (
-                              <p className="text-xs text-muted-foreground">
-                                por kg
-                              </p>
-                            )}
-                            {product.saleType === 'value' && product.valueQuantity && (
-                              <p className="text-xs text-muted-foreground">
-                                R$ 1,00 = {product.valueQuantity} {product.valueLabel || 'unidades'}
-                              </p>
-                            )}
-                          </div>
-                          
-                          {quantity > 0 ? (
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleUpdateQuantity(product.id, quantity - 1)}
-                                className="h-8 w-8 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
-                              >
-                                <Minus className="h-4 w-4" />
-                              </button>
-                              <span className="w-6 text-center font-semibold">{quantity}</span>
-                              <button
-                                onClick={() => handleUpdateQuantity(product.id, quantity + 1)}
-                                className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
-                              >
-                                <Plus className="h-4 w-4" />
-                              </button>
-                            </div>
-                          ) : (
-                            <Button 
-                              size="sm"
-                              onClick={() => handleAddToCart(product)}
+                        {product.saleType === 'value' && product.valueQuantity && (
+                          <p className="text-[10px] text-muted-foreground">
+                            R$ 1,00 = {product.valueQuantity} {product.valueLabel || 'unidades'}
+                          </p>
+                        )}
+                      </div>
+                      
+                      <div className="mt-auto" onClick={(e) => e.stopPropagation()}>
+                        {quantity > 0 ? (
+                          <div className="flex items-center gap-1.5 justify-center">
+                            <button
+                              onClick={() => handleUpdateQuantity(product.id, quantity - 1)}
+                              className="h-7 w-7 rounded-full bg-secondary flex items-center justify-center hover:bg-secondary/80 transition-colors"
                             >
-                              <Plus className="h-4 w-4 mr-1" />
-                              Adicionar
-                            </Button>
-                          )}
-                        </div>
+                              <Minus className="h-3 w-3" />
+                            </button>
+                            <span className="w-6 text-center font-semibold text-xs">{quantity}</span>
+                            <button
+                              onClick={() => handleUpdateQuantity(product.id, quantity + 1)}
+                              className="h-7 w-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:bg-primary/90 transition-colors"
+                            >
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          <Button 
+                            size="sm"
+                            className="w-full h-7 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddToCart(product);
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Adicionar
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardContent>
